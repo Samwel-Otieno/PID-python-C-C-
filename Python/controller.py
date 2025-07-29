@@ -1,4 +1,4 @@
-class Controller:
+class PIDController:
     def __init__(self, Kp, Ki, Kd):
         self.Kp = Kp
         self.Ki = Ki

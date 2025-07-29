@@ -2,7 +2,7 @@
 #This is a sample simulation for the PID controller with three IR sensors used to trace a line
 import matplotlib.pyplot as plt
 import random
-from . import PIDController
+from controller import PIDController
 
 # Convert 3 sensor readings to a line position error
 def get_error_from_sensors(sensors):
@@ -13,14 +13,15 @@ def get_error_from_sensors(sensors):
     if active == 0:
         return None  # no line detected
     else:
+        #multiply the weight and the sensor values and sum the results
         weighted_sum = sum(w * s for w, s in zip(weights, sensors))
         return weighted_sum / active
 
 def simulate_pid_with_3_sensors(Kp, Ki, Kd):
-    pid = PIDController.Controller(Kp, Ki, Kd)
+    pid = PIDController(Kp, Ki, Kd)
 
     time = [0]
-    dt = 0.1
+    dt = 0.1 #time steps delta t
     total_time = 20
 
     # Start with robot slightly off center
@@ -62,7 +63,7 @@ def simulate_pid_with_3_sensors(Kp, Ki, Kd):
         # Assume control improves alignment
         current_error -= control * dt
         errors.append(current_error)
-        time.append(time[-1] + dt)
+        time.append(time[-1] + dt) #add the time step dt to the last time value
 
     # Plot results
     plt.figure(figsize=(10, 5))
