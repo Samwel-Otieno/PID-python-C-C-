@@ -1,63 +1,102 @@
  /*
-  A simple implementation of a PID controller on a line follower robot with 3 IR sensors 
-  with two L298N motor driver  
+  A simple implementation of a PID controller on a line follower robot with 3 IR sensors and L298N motor driver  
 */
-#include <stdio.h>
 #include "controller.h"
+
+// IR sensor pins
+#define IR_LEFT    2
+#define IR_CENTER  3
+#define IR_RIGHT   4
+
+// L298N motor driver pins
+#define ENA 5  //motor 1 PWM
+#define IN1 6
+#define IN2 7
+
+#define ENB 9  //motor 2 PWM
+#define IN3 10
+#define IN4 11
+
+// PID structure
+gains pid;
 
 void setup() {
   Serial.begin(9600);
-  //IR sensors
-  PinMode(2,INPUT);
-  PinMode(3,INPUT);
-  PinMode(4,INPUT);
 
-  //L298N motor driver pins initialize pins with PWM support
-  PinMode(6,OUTPUT);
-  PinMode(9,OUPUT);
-  PinMode(10,OUTPUT);
-  PinMode(11,OUTPUT);
+  // Sensor setup
+  pinMode(IR_LEFT, INPUT);
+  pinMode(IR_CENTER, INPUT);
+  pinMode(IR_RIGHT, INPUT);
+
+  // Motor pin setup
+  pinMode(ENA, OUTPUT);
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  pinMode(ENB, OUTPUT);
+  pinMode(IN3, OUTPUT);
+  pinMode(IN4, OUTPUT);
+
+  // Initialize PID (tune kp, ki, kd)
+  init_pid(&pid, 1.0, 0.2, 0.1); // start with just P and D and adjust to suite the system response
 }
 
 void loop() {
-  //run the functions
-  int error=compute_error();
-  pid_correction=pid.update(error, dt)
-  drive_robot();
+  int error = getLineError();
+  float dt = 0.05; // 50ms
+  float correction = update(&pid, (float)error, dt);
+
+  int base_speed = 150; //should be adjusted based on motor type
+  int left_speed = base_speed - correction;
+  int right_speed = base_speed + correction;
+
+  left_speed = constrain(left_speed, 0, 255);
+  right_speed = constrain(right_speed, 0, 255);
+
+  moveMotors(left_speed, right_speed);
+
+  delay(50); // 50ms cycle
 }
 
-void compute_error(){
-  //initialize the PID 
-  struct gains pid = { .kp = 1, .ki = 0.1, .kd = 0.2, .integral = 0, .prev_error = 0 };
+// Reads sensor state and returns a signed error
+int getLineError() {
+  int left = digitalRead(IR_LEFT);
+  int center = digitalRead(IR_CENTER);
+  int right = digitalRead(IR_RIGHT);
 
-  //initialize pointers to the sensor readings and the weights 
-  int *sensors;
-  int *weights;
-
-  //get sensor readings
-  int sensors[]={digitalRead(2),digitalRead(3),digitalRead(4)};
-  // assign weights for the left center and right sensor readings
-  int weights[]={1,0,-1};
-
-  int len= sizeof(sensors) / sizeof(sensors[0])
-  //sum the sensor values to check if a line has been detected 
+//check how far the robot is from the line
+  if (center == 1 && left == 0 && right == 0) return 0;    // on track
+  else if (left == 1 && center == 1 && right == 0) return 1; //drifting left slightly turn right
+  else if (left == 1 && center == 0 && right == 0) return 2; // sharp right turn
+  else if (right == 1 && center == 1 && left == 0) return -1; // drifting right slightly turn left
+  else if (right == 1 && center == 0 && left == 0) return -2; //sharp left turn
+  else if (left == 1 && center == 1 && right == 1) return 0; // continue straight or we can custom instructions treat it as a T-junction
+  else return 0; // Line lost or ambiguous
   
-  for(int i=0; i<len; i++){
-    int active += sensors[i];
-    int weighted_sum=0;
-    weighted_sum += sensors[i] * weights[i];
-  }
-  // check a line has been detected 
-  if (active==0){
-    return 0;
-  }
-  else {
-    return weighted_sum/active;
-  }
 }
 
-void drive_robot(int base_speed, int pid_correction){
-  //Implement a PWM control on the motor pins 
-  
-  for(int i=0;  )
+/* sensor pattern summary
+| Sensor Pattern | Meaning                   | PID Error   | Action                       |
+| -------------- | ------------------------- | ----------- | ---------------------------- |
+| 0 1 0          | On line                   | 0           | Go straight                  |
+| 1 1 0          | Slightly right of line    | +1          | Slight right turn            |
+| 1 0 0          | Far right of line         | +2          | Sharp right turn             |
+| 0 1 1          | Slightly left of line     | -1          | Slight left turn             |
+| 0 0 1          | Far left of line          | -2          | Sharp left turn              |
+| 1 1 1          | Ambiguous or intersection | 0 (default) | Go straight or custom action |
+
+*/
+
+// Drives both motors with given speeds
+void moveMotors(int leftSpeed, int rightSpeed) {
+  // Left motor forward
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+  analogWrite(ENA, leftSpeed);
+
+  // Right motor forward
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+  analogWrite(ENB, rightSpeed);
 }
+
+
